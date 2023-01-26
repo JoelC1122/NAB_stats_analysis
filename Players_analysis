@@ -1,0 +1,62 @@
+--View data
+SELECT* 
+FROM NBA_Data.dbo.PlayerStats_all$
+
+SELECT*
+FROM NBA_Data.dbo.team_stats$
+
+
+--Filter data with players that have significant minutes (>25mpg) on teams with winning records (win_pct > 0.7)
+with data1 as
+(
+	SELECT T.*,P.Team_Name, P.Player, P.Pos, P.AGE, P.MPG, P.FTA, P.[FT%] as FT_PCT, P.[2PA] as FGA2, P.[2P%] as FG2_PCT, P.[3PA] as FGA3, P.[TS%] as TS_PCT, P.[3P%] as FG3_PCT, P.PPG, P.RPG, P.APG, P.[AST%] as AST_PCT, P.SPG, P.BPG 
+	FROM NBA_Data.dbo.PlayerStats_all$ P
+	JOIN NBA_Data.dbo.team_stats$ T on P.Team_Season = T.TEAM
+	WHERE P.MPG > 25 AND T.win_PCT > 0.7
+)
+
+
+SELECT  *
+INTO top_teams 
+FROM data1
+
+--Teams with WIN_PCT > 0.7
+SELECT DISTINCT TEAM
+FROM top_teams
+
+
+--FG% Analysis
+--Which players with at least 20PPG had the best TS%?
+-- Analysis: The best teams have at least 2 players with TS% > 0.5 and have 20PPG. No clear bias towards positions except for centres which do not have hight TS%.
+SELECT TEAM, Player, TS_PCT, PPG, WIN_PCT, POS, COUNT(POS) OVER (PARTITION BY POS) AS no_pos, COUNT(Player) OVER (PARTITION BY TEAM) AS no_highTS
+FROM top_teams
+WHERE PPG > 20
+ORDER BY TS_PCT DESC
+
+
+--3FG% Analysis
+--Which players with at least 15PPG had high 3p% 
+-- Analysis: Winning teams typically have 2-4 players with at least 15PPG and have FG3% > 0.3.
+SELECT TEAM, Player, FG3_PCT, FGA3, PPG, WIN_PCT, POS, COUNT(POS) OVER (PARTITION BY POS) AS no_pos, COUNT(Player) OVER (PARTITION BY TEAM) AS no_highFG3
+FROM top_teams
+WHERE PPG > 15 AND FG3_PCT > 0.3 AND [FGA3] > 100
+ORDER BY WIN_PCT DESC
+-- Analysis: Gaurds have better FG3% than Forwards.
+SELECT POS, COUNT(POS) as No_POS
+FROM top_teams
+WHERE PPG > 15 AND FG3_PCT > 0.3 AND [FGA3] > 100
+GROUP BY POS
+
+--PPG Analysis
+-- How are the points distributed among winning teams?
+with data1 as
+(
+	SELECT T.*,P.Team_Name, P.Player, P.Pos, P.AGE, P.MPG, P.FTA, P.[FT%] as FT_PCT, P.[2PA] as FGA2, P.[2P%] as FG2_PCT, P.[3PA] as FGA3, P.[TS%] as TS_PCT, P.[3P%] as FG3_PCT, P.PPG, P.RPG, P.APG, P.[AST%] as AST_PCT, P.SPG, P.BPG 
+	FROM NBA_Data.dbo.PlayerStats_all$ P
+	JOIN NBA_Data.dbo.team_stats$ T on P.Team_Season = T.TEAM
+	WHERE P.MPG > 10 AND T.win_PCT > 0.7
+)
+SELECT  TEAM, Player, PPG, WIN_PCT, COUNT(Player) OVER (PARTITION BY TEAM) as Players_Over15pts, pos
+FROM data1
+WHERE PPG > 10
+ORDER BY Team
